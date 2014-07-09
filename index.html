@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+body {
+  font: 10px sans-serif;
+}
+
+.axis path,
+.axis line {
+  fill: none;
+  stroke: #000;
+  shape-rendering: crispEdges;
+}
+
+.line {
+  fill: none;
+  stroke: steelblue;
+  stroke-width: 1.5px;
+}
+
+.tess {
+  fill: none;
+  stroke: aliceblue;
+  stroke-width: 0px;
+  opacity: 0.5;
+}
+    
+.dot {
+    fill: none;
+}
+.hoverdot {
+    fill: red;   
+}
+    
+.hovertext {
+    opacity: 1;
+}
+    
+.hidetext {
+    opacity: 0;
+}
+    
+  
+html {
+  min-width: 1040px;
+}
+
+body {
+  background: #fcfcfa;
+  color: #333;
+  margin: 1em auto 4em auto;
+  position: relative;
+  width: 960px;
+}    
+    
+header {
+
+width: 160px;
+position: fixed;
+float: left;
+margin-left: -160px;
+
+}
+</style>
+
+<body>
+    
+
+
+<header>
+<a href="http://github.com/sachsmc/d3roc">View on github</a>
+</header>
+
+<h1>Interactive ROC Curves</h1>
+<label>Sample size</label><input type="number" id="samplesize" min="10" max="15000" value="200"> <br/>
+<label>Association Strength</label><input type="number" id="beta" min="0" max="4" value=".2"> <br /> 
+<button type="submit" id="sub">Submit</button>
+<p id="roc"></p>    
+    
+<script src="d3.v3.min.js"></script>
+<script>
+
+var margin = {top: 20, right: 20, bottom: 30, left: 50},
+    width = 640 - margin.left - margin.right,
+    height = 520 - margin.top - margin.bottom;
+
+var x = d3.scale.linear()
+    .domain([0, 1])
+    .range([0, width]);
+
+var y = d3.scale.linear()
+    .domain([0, 1])
+    .range([height, 0]);
+
+var xAxis = d3.svg.axis()
+    .scale(x)
+    .orient("bottom");
+
+var yAxis = d3.svg.axis()
+    .scale(y)
+    .orient("left");
+
+var line = d3.svg.line()
+    .x(function(d) { return x(d.fpr); })
+    .y(function(d) { return y(d.tpr); })
+    .interpolate("linear");
+
+var svg = d3.select("p#roc").append("svg")
+    .attr("width", width + margin.left + margin.right)
+    .attr("height", height + margin.top + margin.bottom)
+  .append("g")
+    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+  svg.append("g")
+      .attr("class", "x axis")
+      .attr("transform", "translate(0," + height + ")")
+      .call(xAxis);
+
+  svg.append("g")
+      .attr("class", "y axis")
+      .call(yAxis)
+   ;    
+    
+svg.append("text")
+    .attr("class", "x label")
+    .attr("text-anchor", "end")
+    .attr("x", width)
+    .attr("y", height - 6)
+    .text("False Positive Fraction");
+    
+svg.append("text")
+    .attr("class", "y label")
+    .attr("text-anchor", "end")
+    .attr("y", 6)
+    .attr("dy", ".75em")
+    .attr("transform", "rotate(-90)")
+    .text("True Positive Fraction");    
+    
+draw(svg, 200, .2);
+
+d3.select("#sub").on("click", function(){
+   var nnn = document.getElementById("samplesize").value;
+    var beta = document.getElementById("beta").value;
+    draw(svg, nnn, beta);
+});
+    
+function draw(svg, sampSi, effSi){
+    
+var mark = []
+var labels = [];
+    
+for(var i = 0; i < sampSi; i++){
+ var xx = Math.random() * 10
+ mark.push(xx);
+ var lp = Math.exp(effSi * xx) / (1 + Math.exp(effSi * xx));
+ if( Math.random() < lp  ){ labels.push(1); } else { labels.push(0); }
+}
+ 
+var markSort = mark.slice(0).sort();
+
+var labSort = [];    
+var oneDex = [];
+var zeroDex = [];
+for(var i = 0; i < markSort.length; i++){
+    var cranker = labels[mark.indexOf(markSort[i])]
+    labSort.push(cranker);   
+    if(cranker == 1){
+        oneDex.push(i);
+    } else {
+        zeroDex.push(i);
+    }
+}
+
+
+    
+var data = [];    
+for(var i =0; i<markSort.length; i++){
+    data.push({"tpr": calcTPR(oneDex, markSort, markSort[i]),
+     "fpr": calcFPR(zeroDex, markSort, markSort[i]),
+              "cut": markSort[i]});
+}
+
+var points = [];
+ data.forEach(function(datum){
+     points.push([x(datum.fpr), y(datum.tpr)]);
+ })
+ 
+ svg.selectAll("path.line").remove();
+ svg.selectAll("g.dots").remove();
+ svg.selectAll("g.vors").remove();
+ 
+
+  svg.append("path")
+      .attr("class", "line")
+      .attr("d", line(data));
+
+    svg.append("g").attr("class", "vors")
+        .selectAll("path")
+        .data(d3.geom.voronoi(points))
+        .enter().append("path")
+        .attr("class", "tess")
+        .attr("d", polygon);
+    
+    var cuts = svg.append("g").attr("class", "dots")
+        .selectAll("circle")
+        .data(data)
+        .enter().append("g").attr("class", "cuts");
+    
+    cuts.append("circle")
+       .attr("class", "dot")
+      .attr("r", 3.5)
+      .attr("cx", function(d) { return x(d.fpr); })
+      .attr("cy", function(d) { return y(d.tpr); });
+    
+    cuts.append("text").attr("class", "hidetext")
+      .attr("x", function(d) { return x(d.fpr) + 10; })
+      .attr("y", function(d) { return y(d.tpr) + 10; })
+    .text(function(d) { return "cutoff: " + Math.round(d.cut*10)/10 ;  });
+    
+    d3.selectAll(".tess").on("mouseover", function(d, i){
+        var thiscir = d3.select("g.cuts:nth-child(" + (i+1) + ")" );
+        thiscir.selectAll("circle").attr("class", "hoverdot");
+        thiscir.selectAll("text").attr("class", "hovertext");
+        
+    });
+    d3.selectAll(".tess").on("mouseout", function(d, i){
+         var thiscir = d3.select("g.cuts:nth-child(" + (i+1) + ")" );
+        thiscir.selectAll("circle").attr("class", "dot");
+        thiscir.selectAll("text").attr("class", "hidetext");
+    });
+}    
+    
+function polygon(d) {
+  return "M" + d.join("L") + "Z";
+}  
+function calcTPR(oneDex, markSort, m){
+    
+    var TPR = 0;
+    for(var i = 0; i < oneDex.length; i++){
+       if(markSort[oneDex[i]] >= m) {
+           TPR = TPR + (1/oneDex.length);
+       }
+    }
+    return TPR;
+        
+}
+    
+function calcFPR(zeroDex, markSort, m){
+    
+    var FPR = 0;
+    for(var i = 0; i < zeroDex.length; i++){
+       if(markSort[zeroDex[i]] >= m) {
+           FPR = FPR + (1/zeroDex.length);
+       }
+    }
+    return FPR;
+        
+}        
+    
+
+</script>
