@@ -13,29 +13,30 @@ body {
   shape-rendering: crispEdges;
 }
 
-.line {
-  fill: none;
-  stroke: steelblue;
-  stroke-width: 1.5px;
-}
-
 .tess {
   fill: none;
   stroke: aliceblue;
   stroke-width: 0px;
   opacity: 0.5;
 }
+
+.line {
+  fill: none;
+  stroke: steelblue;
+  stroke-width: 1.5px;
+}
     
 .dot {
     fill: none;
 }
-.hoverdot {
-    fill: red;   
+
+.vors :hover circle {
+  fill: red;
 }
-    
-.hovertext {
-    opacity: 1;
-}
+   
+.vors :hover text {
+	opacity: 1;
+}   
     
 .hidetext {
     opacity: 0;
@@ -105,6 +106,11 @@ var line = d3.svg.line()
     .x(function(d) { return x(d.fpr); })
     .y(function(d) { return y(d.tpr); })
     .interpolate("linear");
+
+var voronoi = d3.geom.voronoi()
+		.x(function(d){ return x(d.fpr);})
+		.y(function(d){ return y(d.tpr);})
+	    .clipExtent([[-2, -2], [width + 2, height + 2]]);
 
 var svg = d3.select("p#roc").append("svg")
     .attr("width", width + margin.left + margin.right)
@@ -180,60 +186,48 @@ for(var i =0; i<markSort.length; i++){
      "fpr": calcFPR(zeroDex, markSort, markSort[i]),
               "cut": markSort[i]});
 }
+ 
+var tess = voronoi(data);
 
-var points = [];
- data.forEach(function(datum){
-     points.push([x(datum.fpr), y(datum.tpr)]);
- })
- 
- svg.selectAll("path.line").remove();
- svg.selectAll("g.dots").remove();
- svg.selectAll("g.vors").remove();
- 
+for(var i = 0; i < data.length; i++){
+	
+	data[i].vtess = tess[i];
+	
+} 
+
+svg.selectAll("path.line").remove();
 
   svg.append("path")
       .attr("class", "line")
       .attr("d", line(data));
 
-    svg.append("g").attr("class", "vors")
-        .selectAll("path")
-        .data(d3.geom.voronoi(points))
-        .enter().append("path")
+  var cells = svg.append("g").attr("class", "vors").selectAll("g");
+  
+  cell = cells.data(data);
+  cell.exit().remove();
+	
+    var cellEnter = cell.enter().append("g");
+	
+    cellEnter.append("circle")
+    	.attr("class", "dot")
+   	 	.attr("r", 3.5)
+		.attr("cx", function(d) { return x(d.fpr); })
+		.attr("cy", function(d) { return y(d.tpr); })
+   	 	;
+	
+    cellEnter.append("path")
         .attr("class", "tess")
-        .attr("d", polygon);
-    
-    var cuts = svg.append("g").attr("class", "dots")
-        .selectAll("circle")
-        .data(data)
-        .enter().append("g").attr("class", "cuts");
-    
-    cuts.append("circle")
-       .attr("class", "dot")
-      .attr("r", 3.5)
-      .attr("cx", function(d) { return x(d.fpr); })
-      .attr("cy", function(d) { return y(d.tpr); });
-    
-    cuts.append("text").attr("class", "hidetext")
-      .attr("x", function(d) { return x(d.fpr) + 10; })
-      .attr("y", function(d) { return y(d.tpr) + 10; })
-    .text(function(d) { return "cutoff: " + Math.round(d.cut*10)/10 ;  });
-    
-    d3.selectAll(".tess").on("mouseover", function(d, i){
-        var thiscir = d3.select("g.cuts:nth-child(" + (i+1) + ")" );
-        thiscir.selectAll("circle").attr("class", "hoverdot");
-        thiscir.selectAll("text").attr("class", "hovertext");
-        
-    });
-    d3.selectAll(".tess").on("mouseout", function(d, i){
-         var thiscir = d3.select("g.cuts:nth-child(" + (i+1) + ")" );
-        thiscir.selectAll("circle").attr("class", "dot");
-        thiscir.selectAll("text").attr("class", "hidetext");
-    });
+        ;
+       
+    cell.select("path").attr("d", function(d) { return "M" + d.vtess.join("L") + "Z"; });   
+	
+	cellEnter.append("text").attr("class", "hidetext")
+	    .attr("x", function(d) { return x(d.fpr) + 10; })
+	    .attr("y", function(d) { return y(d.tpr) + 10; })
+	    .text(function(d) { return "cutoff: " + Math.round(d.cut*10)/10 ;  });
+
 }    
     
-function polygon(d) {
-  return "M" + d.join("L") + "Z";
-}  
 function calcTPR(oneDex, markSort, m){
     
     var TPR = 0;
